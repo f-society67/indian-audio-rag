@@ -48,7 +48,8 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
         'format': 'bestaudio/best',
         'outtmpl': f"{output_base_path}.%(ext)s",
         'js_runtimes': {'node': {}},
-        'extractor_args': {'youtube': ['player_client=default']},
+        # Spoof Android/iOS clients to bypass YouTube datacenter IP blocks
+        'extractor_args': {'youtube': ['player_client=android,ios']},
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
