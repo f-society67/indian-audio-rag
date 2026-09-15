@@ -1,0 +1,8 @@
+streamlit
+yt-dlp
+requests
+python-dotenv
+langchain-core
+langchain-cohere
+langchain-pinecone
+langchain-groq
