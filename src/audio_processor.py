@@ -2,6 +2,7 @@
 import os
 import requests
 import yt_dlp
+import streamlit as st
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,17 +44,27 @@ def transcribe_audio_groq(file_path: str):
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
     Downloads the best audio stream from YouTube and compresses to 64 kbps MP3.
-    Includes advanced anti-bot bypass for Streamlit Cloud data center IPs.
+    Uses browser cookies from Streamlit secrets to bypass data center IP blocks.
     """
+    cookie_path = f"{output_base_path}_cookies.txt"
+    
+    # Safely pull the cookie block from Streamlit Secrets or local .env
+    youtube_cookies = None
+    try:
+        if "YOUTUBE_COOKIES" in st.secrets:
+            youtube_cookies = st.secrets["YOUTUBE_COOKIES"]
+    except Exception:
+        youtube_cookies = os.getenv("YOUTUBE_COOKIES")
+        
+    # If cookies exist, write them to a temporary file
+    if youtube_cookies:
+        with open(cookie_path, "w") as f:
+            f.write(youtube_cookies)
+            
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f"{output_base_path}.%(ext)s",
         'js_runtimes': {'node': {}},
-        'extractor_args': {'youtube': ['player_client=ios,android_creator']},
-        'source_address': '0.0.0.0',
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
@@ -63,7 +74,16 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
         'nocheckcertificate': True
     }
     
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([youtube_url])
+    # Tell yt-dlp to use the cookie file we just generated
+    if youtube_cookies:
+        ydl_opts['cookiefile'] = cookie_path
+    
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([youtube_url])
+    finally:
+        # Immediately delete the sensitive cookie file after the download finishes
+        if os.path.exists(cookie_path):
+            os.remove(cookie_path)
     
     return f"{output_base_path}.mp3"
