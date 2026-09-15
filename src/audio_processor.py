@@ -43,13 +43,17 @@ def transcribe_audio_groq(file_path: str):
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
     Downloads the best audio stream from YouTube and compresses to 64 kbps MP3.
+    Includes advanced anti-bot bypass for Streamlit Cloud data center IPs.
     """
     ydl_opts = {
         'format': 'bestaudio/best',
         'outtmpl': f"{output_base_path}.%(ext)s",
         'js_runtimes': {'node': {}},
-        # Spoof Android/iOS clients to bypass YouTube datacenter IP blocks
-        'extractor_args': {'youtube': ['player_client=android,ios']},
+        'extractor_args': {'youtube': ['player_client=ios,android_creator']},
+        'source_address': '0.0.0.0',
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+        },
         'postprocessors': [{
             'key': 'FFmpegExtractAudio',
             'preferredcodec': 'mp3',
