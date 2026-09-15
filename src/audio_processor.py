@@ -1,8 +1,8 @@
 # src/audio_processor.py
 import os
 import requests
-import yt_dlp
-import streamlit as st
+import asyncio
+from pybalt import download
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,47 +43,20 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Downloads the best audio stream from YouTube and compresses to 64 kbps MP3.
-    Uses browser cookies from Streamlit secrets to bypass data center IP blocks.
+    Downloads audio using pybalt (Cobalt API) to completely sidestep 
+    YouTube's datacenter IP bans on Streamlit Cloud.
     """
-    cookie_path = f"{output_base_path}_cookies.txt"
+    # Pybalt asynchronously routes the download through unblocked community servers
+    downloaded_path = asyncio.run(download(
+        youtube_url,
+        isAudioOnly=True,
+        audioFormat="mp3"
+    ))
     
-    # Safely pull the cookie block from Streamlit Secrets or local .env
-    youtube_cookies = None
-    try:
-        if "YOUTUBE_COOKIES" in st.secrets:
-            youtube_cookies = st.secrets["YOUTUBE_COOKIES"]
-    except Exception:
-        youtube_cookies = os.getenv("YOUTUBE_COOKIES")
-        
-    # If cookies exist, write them to a temporary file
-    if youtube_cookies:
-        with open(cookie_path, "w") as f:
-            f.write(youtube_cookies)
-            
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'outtmpl': f"{output_base_path}.%(ext)s",
-        'js_runtimes': {'node': {}},
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '64',
-        }],
-        'quiet': True,
-        'nocheckcertificate': True
-    }
+    final_path = f"{output_base_path}.mp3"
     
-    # Tell yt-dlp to use the cookie file we just generated
-    if youtube_cookies:
-        ydl_opts['cookiefile'] = cookie_path
+    # Move the downloaded file to the temp path our Streamlit app expects
+    if os.path.exists(downloaded_path):
+        os.rename(downloaded_path, final_path)
     
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([youtube_url])
-    finally:
-        # Immediately delete the sensitive cookie file after the download finishes
-        if os.path.exists(cookie_path):
-            os.remove(cookie_path)
-    
-    return f"{output_base_path}.mp3"
+    return final_path
