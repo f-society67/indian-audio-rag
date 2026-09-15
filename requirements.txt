@@ -1,5 +1,6 @@
 streamlit
 pybalt
+aiofiles
 requests
 python-dotenv
 langchain-core
