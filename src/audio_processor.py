@@ -42,16 +42,18 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Downloads audio using pytubefix to completely bypass 
-    YouTube's datacenter IP bans and 403 errors on Streamlit Cloud.
+    Downloads audio using pytubefix with Android client spoofing and PoToken
+    to completely bypass YouTube's datacenter IP bans on Streamlit Cloud.
     """
-    # pytubefix automatically handles PoToken bypasses under the hood
-    yt = YouTube(youtube_url)
+    # Force the Android client and enable PoToken to bypass YouTube's strict bot detection
+    yt = YouTube(
+        youtube_url, 
+        client='ANDROID', 
+        use_po_token=True
+    )
     
-    # Grab the best audio-only stream
     audio_stream = yt.streams.get_audio_only()
     
-    # Download directly to the expected temp path
     final_path = f"{output_base_path}.mp3"
     audio_stream.download(filename=final_path)
     
