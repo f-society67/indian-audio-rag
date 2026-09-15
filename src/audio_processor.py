@@ -1,8 +1,7 @@
 # src/audio_processor.py
 import os
 import requests
-import asyncio
-from pybalt import download
+from pytubefix import YouTube
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -43,20 +42,17 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Downloads audio using pybalt (Cobalt API) to completely sidestep 
-    YouTube's datacenter IP bans on Streamlit Cloud.
+    Downloads audio using pytubefix to completely bypass 
+    YouTube's datacenter IP bans and 403 errors on Streamlit Cloud.
     """
-    # Pybalt asynchronously routes the download through unblocked community servers
-    downloaded_path = asyncio.run(download(
-        youtube_url,
-        isAudioOnly=True,
-        audioFormat="mp3"
-    ))
+    # pytubefix automatically handles PoToken bypasses under the hood
+    yt = YouTube(youtube_url)
     
+    # Grab the best audio-only stream
+    audio_stream = yt.streams.get_audio_only()
+    
+    # Download directly to the expected temp path
     final_path = f"{output_base_path}.mp3"
-    
-    # Move the downloaded file to the temp path our Streamlit app expects
-    if os.path.exists(downloaded_path):
-        os.rename(downloaded_path, final_path)
+    audio_stream.download(filename=final_path)
     
     return final_path
