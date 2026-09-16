@@ -2,26 +2,24 @@
 import streamlit as st
 import os
 import tempfile
+import uuid
 import re
 from src.audio_processor import transcribe_audio_groq, download_youtube_audio
 from src.rag_pipeline import index_audio_segments, query_audio_rag
 
 st.set_page_config(page_title="Indic Audio RAG", layout="wide")
 
-# Initialize Session State
 if "messages" not in st.session_state:
     st.session_state.messages = []
 if "uploaded_files_registry" not in st.session_state:
-    st.session_state.uploaded_files_registry = {}  # {source_name: file_bytes}
+    st.session_state.uploaded_files_registry = {}  
 if "active_audio" not in st.session_state:
     st.session_state.active_audio = None
 
 st.title("🎙️ Indian Language Audio Knowledge Engine")
 
-# --- SIDEBAR: Audio Management & Context Selection ---
 with st.sidebar:
     st.header("1. Add Audio Context")
-    
     tab1, tab2 = st.tabs(["Upload Local File", "YouTube URL"])
     
     with tab1:
@@ -33,13 +31,9 @@ with st.sidebar:
                         file_bytes = uploaded_file.getvalue()
                         tmp_file.write(file_bytes)
                         temp_path = tmp_file.name
-                    
                     try:
-                        # 1. Transcribe & Index using Groq
                         segments = transcribe_audio_groq(temp_path)
                         index_audio_segments(segments, uploaded_file.name)
-                        
-                        # 2. Save file to state for playback later
                         st.session_state.uploaded_files_registry[uploaded_file.name] = file_bytes
                         st.success(f"{uploaded_file.name} indexed successfully!")
                     except Exception as e:
@@ -52,31 +46,35 @@ with st.sidebar:
     with tab2:
         youtube_url = st.text_input("Enter YouTube Video URL")
         if st.button("Process YouTube") and youtube_url:
-            # Create a simple name based on the video ID
             source_name = f"YouTube: {youtube_url.split('v=')[-1][:11]}"
-            
             if source_name not in st.session_state.uploaded_files_registry:
-                with st.spinner("Extracting and processing YouTube transcript..."):
+                with st.spinner("Delegating download and processing audio..."):
+                    
+                    temp_dir = tempfile.gettempdir()
+                    unique_id = uuid.uuid4().hex
+                    base_path = os.path.join(temp_dir, f"yt_audio_{unique_id}")
+                    final_audio_path = f"{base_path}.m4a"
+                    
                     try:
-                        # 1. Extract Video ID using our updated bypass function
-                        video_id = download_youtube_audio(youtube_url)
+                        download_youtube_audio(youtube_url, base_path)
                         
-                        # 2. Fetch Transcript directly via API
-                        segments = transcribe_audio_groq(video_id)
+                        with open(final_audio_path, "rb") as f:
+                            file_bytes = f.read()
                         
-                        # 3. Index to Pinecone
+                        segments = transcribe_audio_groq(final_audio_path)
                         index_audio_segments(segments, source_name)
                         
-                        # 4. Save to state (store None for bytes since we have no MP3)
-                        st.session_state.uploaded_files_registry[source_name] = None
-                        st.success(f"YouTube transcript indexed successfully!")
+                        st.session_state.uploaded_files_registry[source_name] = file_bytes
+                        st.success(f"YouTube audio indexed successfully!")
                     except Exception as e:
-                        st.error(f"Error processing YouTube transcript: {e}")
+                        st.error(f"Error processing YouTube audio: {e}")
+                    finally:
+                        if os.path.exists(final_audio_path):
+                            os.remove(final_audio_path)
             else:
                 st.warning("This YouTube URL is already processed.")
 
     st.divider()
-    
     st.header("2. Context Selection")
     available_files = list(st.session_state.uploaded_files_registry.keys())
     
@@ -86,30 +84,22 @@ with st.sidebar:
             options=available_files,
             default=available_files
         )
-        
         st.header("3. Audio Player")
         st.session_state.active_audio = st.selectbox("Select file to play:", options=available_files)
         
         if st.session_state.active_audio:
             audio_bytes = st.session_state.uploaded_files_registry[st.session_state.active_audio]
-            # Only play audio if we actually have bytes (local files)
             if audio_bytes:
                 st.audio(audio_bytes)
-            else:
-                st.info("Audio playback is not available for instant YouTube transcripts.")
     else:
         selected_files = []
         st.info("Add audio sources to begin.")
 
-# --- MAIN AREA: Chat Interface ---
 st.header("Ask Questions")
-
-# Render Chat History
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
-# Handle New Query
 if prompt := st.chat_input("E.g., What did the speaker say about consideration?"):
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
@@ -122,16 +112,12 @@ if prompt := st.chat_input("E.g., What did the speaker say about consideration?"
             with st.spinner("Searching audio context..."):
                 try:
                     response = query_audio_rag(prompt, selected_sources=selected_files)
-                    
                     answer = response["answer"]
                     sources = response["source_documents"]
                     
-                    # Highlight timestamps in the answer
                     formatted_answer = re.sub(r'\[([\d\.]+)s\]', r'**[\1s]** ⏱️', answer)
-                    
                     st.markdown(formatted_answer)
                     
-                    # Add Citation Details
                     with st.expander("View Source Transcripts"):
                         for i, doc in enumerate(sources):
                             start = doc.metadata.get('start_time', 0)
