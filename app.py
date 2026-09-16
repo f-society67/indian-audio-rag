@@ -2,7 +2,6 @@
 import streamlit as st
 import os
 import tempfile
-import uuid
 import re
 from src.audio_processor import transcribe_audio_groq, download_youtube_audio
 from src.rag_pipeline import index_audio_segments, query_audio_rag
@@ -55,35 +54,24 @@ with st.sidebar:
         if st.button("Process YouTube") and youtube_url:
             # Create a simple name based on the video ID
             source_name = f"YouTube: {youtube_url.split('v=')[-1][:11]}"
+            
             if source_name not in st.session_state.uploaded_files_registry:
-                with st.spinner("Downloading and processing YouTube audio..."):
-                    
-                    # Generate a unique base path WITHOUT an extension in the OS temp directory
-                    temp_dir = tempfile.gettempdir()
-                    unique_id = uuid.uuid4().hex
-                    base_path = os.path.join(temp_dir, f"yt_audio_{unique_id}")
-                    final_mp3_path = f"{base_path}.mp3"
-                    
+                with st.spinner("Extracting and processing YouTube transcript..."):
                     try:
-                        # 1. Download audio (yt-dlp will append .mp3 automatically)
-                        download_youtube_audio(youtube_url, base_path)
+                        # 1. Extract Video ID using our updated bypass function
+                        video_id = download_youtube_audio(youtube_url)
                         
-                        # Read bytes for playback
-                        with open(final_mp3_path, "rb") as f:
-                            file_bytes = f.read()
+                        # 2. Fetch Transcript directly via API
+                        segments = transcribe_audio_groq(video_id)
                         
-                        # 2. Transcribe & Index using Groq
-                        segments = transcribe_audio_groq(final_mp3_path)
+                        # 3. Index to Pinecone
                         index_audio_segments(segments, source_name)
                         
-                        # 3. Save to state
-                        st.session_state.uploaded_files_registry[source_name] = file_bytes
-                        st.success(f"YouTube audio indexed successfully!")
+                        # 4. Save to state (store None for bytes since we have no MP3)
+                        st.session_state.uploaded_files_registry[source_name] = None
+                        st.success(f"YouTube transcript indexed successfully!")
                     except Exception as e:
-                        st.error(f"Error processing YouTube audio: {e}")
-                    finally:
-                        if os.path.exists(final_mp3_path):
-                            os.remove(final_mp3_path)
+                        st.error(f"Error processing YouTube transcript: {e}")
             else:
                 st.warning("This YouTube URL is already processed.")
 
@@ -104,7 +92,11 @@ with st.sidebar:
         
         if st.session_state.active_audio:
             audio_bytes = st.session_state.uploaded_files_registry[st.session_state.active_audio]
-            st.audio(audio_bytes)
+            # Only play audio if we actually have bytes (local files)
+            if audio_bytes:
+                st.audio(audio_bytes)
+            else:
+                st.info("Audio playback is not available for instant YouTube transcripts.")
     else:
         selected_files = []
         st.info("Add audio sources to begin.")
