@@ -1,6 +1,5 @@
 streamlit
-yt-dlp
-curl-cffi
+pytubefix
 requests
 python-dotenv
 langchain-core

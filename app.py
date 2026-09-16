@@ -23,7 +23,7 @@ with st.sidebar:
     tab1, tab2 = st.tabs(["Upload Local File", "YouTube URL"])
     
     with tab1:
-        uploaded_file = st.file_uploader("Choose an audio file", type=['mp3', 'wav', 'm4a'])
+        uploaded_file = st.file_uploader("Choose an audio file", type=['mp3', 'wav', 'm4a', 'mp4'])
         if st.button("Process Local File") and uploaded_file:
             if uploaded_file.name not in st.session_state.uploaded_files_registry:
                 with st.spinner(f"Processing {uploaded_file.name}..."):
@@ -37,7 +37,7 @@ with st.sidebar:
                         st.session_state.uploaded_files_registry[uploaded_file.name] = file_bytes
                         st.success(f"{uploaded_file.name} indexed successfully!")
                     except Exception as e:
-                        st.error(f"Error processing audio: {e}")
+                        st.error(f"Error processing audio: {str(e) or 'Unknown Error occurred'}")
                     finally:
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
@@ -49,7 +49,7 @@ with st.sidebar:
         if st.button("Process YouTube") and youtube_url:
             source_name = f"YouTube: {youtube_url.split('v=')[-1][:11]}"
             if source_name not in st.session_state.uploaded_files_registry:
-                with st.spinner("Bypassing bot detection and extracting audio..."):
+                with st.spinner("Authenticating via TV client and extracting audio..."):
                     
                     temp_dir = tempfile.gettempdir()
                     unique_id = uuid.uuid4().hex
@@ -68,7 +68,10 @@ with st.sidebar:
                         st.session_state.uploaded_files_registry[source_name] = file_bytes
                         st.success(f"YouTube audio indexed successfully!")
                     except Exception as e:
-                        st.error(f"Error processing YouTube audio: {e}")
+                        err_msg = str(e).strip()
+                        if not err_msg:
+                            err_msg = "YouTube blocked the download (HTTP 403 / PoToken Required)."
+                        st.error(f"Error processing YouTube audio: {err_msg}")
                     finally:
                         if os.path.exists(final_audio_path):
                             os.remove(final_audio_path)
