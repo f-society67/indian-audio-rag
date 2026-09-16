@@ -1,59 +1,34 @@
 # src/audio_processor.py
-import os
-import requests
-from pytubefix import YouTube
-from dotenv import load_dotenv
+import re
+from youtube_transcript_api import YouTubeTranscriptApi
 
-load_dotenv()
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-def transcribe_audio_groq(file_path: str):
+def download_youtube_audio(youtube_url: str, output_base_path: str = None):
     """
-    Sends the audio to Groq's Whisper endpoint.
-    Returns segments with start and end timestamps.
+    Instead of downloading audio, we extract the video ID and pass it along.
+    This takes 0 seconds and bypasses all 403 data center blocks.
     """
-    url = "https://api.groq.com/openai/v1/audio/transcriptions"
+    match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", youtube_url)
+    video_id = match.group(1) if match else None
     
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}"
-    }
-    
-    data = {
-        "model": "whisper-large-v3",
-        "response_format": "verbose_json"
-    }
-    
-    with open(file_path, "rb") as f:
-        files = {"file": (os.path.basename(file_path), f, "audio/mpeg")}
-        response = requests.post(url, headers=headers, files=files, data=data)
+    if not video_id:
+        raise ValueError("Could not extract a valid YouTube video ID from the URL.")
         
-    response.raise_for_status()
-    response_data = response.json()
+    return video_id 
+
+def transcribe_audio_groq(video_id: str):
+    """
+    Bypasses Groq Whisper entirely and fetches YouTube's native transcript instantly.
+    Formats the text to perfectly match the structure your Pinecone indexer expects.
+    """
+    # Fetch transcript directly (defaults to English)
+    raw_transcript = YouTubeTranscriptApi.get_transcript(video_id)
     
     all_segments = []
-    for segment in response_data.get("segments", []):
+    for entry in raw_transcript:
         all_segments.append({
-            "text": segment.get("text", ""),
-            "start_time": float(segment.get("start", 0.0)),
-            "end_time": float(segment.get("end", 0.0))
+            "text": entry.get("text", ""),
+            "start_time": float(entry.get("start", 0.0)),
+            "end_time": float(entry.get("start", 0.0)) + float(entry.get("duration", 0.0))
         })
         
     return all_segments
-
-def download_youtube_audio(youtube_url: str, output_base_path: str):
-    """
-    Downloads audio using pytubefix with automatic PoToken generation
-    to avoid blocking the server with terminal input prompts.
-    """
-    # The WEB client silently auto-generates the PoToken using Node.js
-    yt = YouTube(
-        youtube_url, 
-        client='WEB'
-    )
-    
-    audio_stream = yt.streams.get_audio_only()
-    
-    final_path = f"{output_base_path}.mp3"
-    audio_stream.download(filename=final_path)
-    
-    return final_path

@@ -1,5 +1,5 @@
 streamlit
-pytubefix
+youtube-transcript-api
 requests
 python-dotenv
 langchain-core
