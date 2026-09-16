@@ -49,7 +49,7 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
         raise ValueError("Could not extract a valid YouTube video ID.")
         
     # Hit the free Piped API network
-    api_url = f"https://pipedapi.kavin.rocks/streams/{video_id}"
+    api_url = f"https://pipedapi.piped.yt/streams/{video_id}"
     response = requests.get(api_url)
     response.raise_for_status()
     
