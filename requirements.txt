@@ -1,5 +1,4 @@
 streamlit
-pytubefix
 requests
 python-dotenv
 langchain-core

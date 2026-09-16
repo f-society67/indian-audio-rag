@@ -23,11 +23,11 @@ with st.sidebar:
     tab1, tab2 = st.tabs(["Upload Local File", "YouTube URL"])
     
     with tab1:
-        uploaded_file = st.file_uploader("Choose an audio file", type=['mp3', 'wav', 'm4a', 'mp4'])
+        uploaded_file = st.file_uploader("Choose an audio file", type=['mp3', 'wav', 'm4a'])
         if st.button("Process Local File") and uploaded_file:
             if uploaded_file.name not in st.session_state.uploaded_files_registry:
                 with st.spinner(f"Processing {uploaded_file.name}..."):
-                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp_file:
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                         file_bytes = uploaded_file.getvalue()
                         tmp_file.write(file_bytes)
                         temp_path = tmp_file.name
@@ -39,7 +39,8 @@ with st.sidebar:
                     except Exception as e:
                         st.error(f"Error processing audio: {e}")
                     finally:
-                        os.remove(temp_path)
+                        if os.path.exists(temp_path):
+                            os.remove(temp_path)
             else:
                 st.warning("File already processed.")
                 
@@ -48,12 +49,12 @@ with st.sidebar:
         if st.button("Process YouTube") and youtube_url:
             source_name = f"YouTube: {youtube_url.split('v=')[-1][:11]}"
             if source_name not in st.session_state.uploaded_files_registry:
-                with st.spinner("Downloading native stream and processing audio..."):
+                with st.spinner("Downloading audio via Cobalt API and processing..."):
                     
                     temp_dir = tempfile.gettempdir()
                     unique_id = uuid.uuid4().hex
                     base_path = os.path.join(temp_dir, f"yt_audio_{unique_id}")
-                    final_audio_path = f"{base_path}.mp4"
+                    final_audio_path = f"{base_path}.mp3"
                     
                     try:
                         download_youtube_audio(youtube_url, base_path)
