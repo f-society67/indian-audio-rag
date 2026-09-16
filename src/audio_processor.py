@@ -41,7 +41,6 @@ def transcribe_audio_groq(file_path: str):
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
     Delegates YouTube extraction to the public Piped API network.
-    100% free, no API keys, no billing info.
     """
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", youtube_url)
     video_id = match.group(1) if match else None
@@ -54,7 +53,6 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
     response = requests.get(api_url)
     response.raise_for_status()
     
-    # Piped returns a list of audio streams. 
     audio_streams = response.json().get("audioStreams", [])
     if not audio_streams:
         raise ValueError("No audio streams found for this video.")
@@ -62,7 +60,6 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
     # Find an m4a stream (highly compressed, fast to download)
     stream_url = next((stream['url'] for stream in audio_streams if stream['format'] == 'M4A'), audio_streams[0]['url'])
     
-    # Download the actual audio data directly to the Streamlit server
     audio_data = requests.get(stream_url)
     
     final_path = f"{output_base_path}.m4a"
