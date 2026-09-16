@@ -39,7 +39,8 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Bulletproof YouTube downloader using a rotating list of Piped APIs.
+    Bulletproof YouTube downloader using Invidious API with rotating servers.
+    Bypasses the current global Piped API outages.
     """
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", youtube_url)
     video_id = match.group(1) if match else None
@@ -47,36 +48,41 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
     if not video_id:
         raise ValueError("Could not extract a valid YouTube video ID.")
         
-    # Pool of active Piped instances to prevent single-node failure
-    piped_instances = [
-        "https://api.piped.private.coffee",
-        "https://pipedapi.moomoo.me",
-        "https://pipedapi.tokhmi.xyz",
-        "https://pipedapi.phoenixthrush.com",
-        "https://pipedapi.kavin.rocks"
+    # Pool of active Invidious instances
+    invidious_instances = [
+        "https://invidious.nerdvpn.de",
+        "https://inv.tux.pizza",
+        "https://invidious.perennialte.ch",
+        "https://invidious.privacydev.net",
+        "https://inv.nadeko.net"
     ]
     
-    audio_streams = None
+    stream_url = None
     
-    # Cycle through servers until one works
-    for instance in piped_instances:
+    # Cycle through servers until one successfully returns the data
+    for instance in invidious_instances:
         try:
-            api_url = f"{instance}/streams/{video_id}"
+            api_url = f"{instance}/api/v1/videos/{video_id}"
             response = requests.get(api_url, timeout=10)
             response.raise_for_status()
             
             data = response.json()
-            if "audioStreams" in data and len(data["audioStreams"]) > 0:
-                audio_streams = data["audioStreams"]
-                break
+            if "adaptiveFormats" in data:
+                # Find the highest compressed audio-only stream (m4a/webm)
+                for stream in data["adaptiveFormats"]:
+                    if stream.get("type", "").startswith("audio/"):
+                        stream_url = stream["url"]
+                        break
+            
+            if stream_url:
+                break # We got the URL, exit the loop
         except Exception:
             continue
             
-    if not audio_streams:
-        raise ValueError("All backup Piped servers failed. YouTube might be blocking them globally.")
+    if not stream_url:
+        raise ValueError("All Invidious backup servers failed or no audio stream found. YouTube might be blocking them.")
         
-    stream_url = next((stream['url'] for stream in audio_streams if stream['format'] == 'M4A'), audio_streams[0]['url'])
-    
+    # Download the actual audio data directly to the Streamlit server
     audio_data = requests.get(stream_url)
     final_path = f"{output_base_path}.m4a"
     
