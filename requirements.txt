@@ -1,4 +1,6 @@
 streamlit
+yt-dlp
+curl-cffi
 requests
 python-dotenv
 langchain-core

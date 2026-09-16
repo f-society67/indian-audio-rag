@@ -1,6 +1,7 @@
 # src/audio_processor.py
 import os
 import requests
+import yt_dlp
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,7 +21,8 @@ def transcribe_audio_groq(file_path: str):
     }
     
     with open(file_path, "rb") as f:
-        files = {"file": (os.path.basename(file_path), f, "audio/mpeg")}
+        # Whisper supports m4a files encoded as mp4
+        files = {"file": (os.path.basename(file_path), f, "audio/mp4")}
         response = requests.post(url, headers=headers, files=files, data=data)
         
     response.raise_for_status()
@@ -38,48 +40,23 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Directly uses the Cobalt API for audio extraction.
-    Bypasses datacenter IP bans natively without relying on pytubefix.
+    Downloads the native M4A stream using yt-dlp with Chrome impersonation.
+    curl-cffi handles the TLS fingerprinting to bypass YouTube 403 IP blocks natively.
     """
-    headers = {
-        "Accept": "application/json",
-        "Content-Type": "application/json"
+    final_path = f"{output_base_path}.m4a"
+    
+    ydl_opts = {
+        'format': '140',  # 140 is YouTube's native M4A audio stream (no ffmpeg needed)
+        'outtmpl': final_path,
+        'impersonate': 'chrome',
+        'quiet': True,
+        'no_warnings': True
     }
     
-    payload = {
-        "url": youtube_url,
-        "isAudioOnly": True,
-        "downloadMode": "audio",
-        "aFormat": "mp3"
-    }
-    
-    # Pool of active Cobalt instances
-    endpoints = [
-        "https://api.cobalt.tools/api/json",
-        "https://co.wuk.sh/api/json",
-        "https://cobalt.qewertyy.dev/api/json"
-    ]
-    
-    download_link = None
-    for api_url in endpoints:
-        try:
-            response = requests.post(api_url, json=payload, headers=headers, timeout=15)
-            if response.status_code == 200:
-                data = response.json()
-                if data.get("status") != "error" and data.get("url"):
-                    download_link = data["url"]
-                    break
-        except Exception:
-            continue
-            
-    if not download_link:
-        raise ValueError("All Cobalt API endpoints failed or timed out.")
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([youtube_url])
         
-    # Download the extracted MP3 file
-    audio_data = requests.get(download_link)
-    final_path = f"{output_base_path}.mp3"
-    
-    with open(final_path, "wb") as f:
-        f.write(audio_data.content)
+    if not os.path.exists(final_path):
+        raise FileNotFoundError(f"Failed to download audio to {final_path}")
         
     return final_path
