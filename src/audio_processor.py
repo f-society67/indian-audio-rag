@@ -20,8 +20,9 @@ def transcribe_audio_groq(video_id: str):
     Bypasses Groq Whisper entirely and fetches YouTube's native transcript instantly.
     Formats the text to perfectly match the structure your Pinecone indexer expects.
     """
-    # Fetch transcript directly (defaults to English)
-    raw_transcript = YouTubeTranscriptApi.get_transcript(video_id)
+    # Updated to the new v1.2.4 syntax: initialize the class, then fetch
+    ytt_api = YouTubeTranscriptApi()
+    raw_transcript = ytt_api.fetch(video_id)
     
     all_segments = []
     for entry in raw_transcript:
