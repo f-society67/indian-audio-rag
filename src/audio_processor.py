@@ -21,7 +21,6 @@ def transcribe_audio_groq(file_path: str):
     }
     
     with open(file_path, "rb") as f:
-        # Whisper natively supports m4a format
         files = {"file": (os.path.basename(file_path), f, "audio/mp4")}
         response = requests.post(url, headers=headers, files=files, data=data)
         
@@ -40,7 +39,7 @@ def transcribe_audio_groq(file_path: str):
 
 def download_youtube_audio(youtube_url: str, output_base_path: str):
     """
-    Delegates YouTube extraction to the public Piped API network.
+    Bulletproof YouTube downloader using a rotating list of Piped APIs.
     """
     match = re.search(r"(?:v=|\/)([0-9A-Za-z_-]{11}).*", youtube_url)
     video_id = match.group(1) if match else None
@@ -48,21 +47,39 @@ def download_youtube_audio(youtube_url: str, output_base_path: str):
     if not video_id:
         raise ValueError("Could not extract a valid YouTube video ID.")
         
-    # Hit the free Piped API network
-    api_url = f"https://pipedapi.piped.yt/streams/{video_id}"
-    response = requests.get(api_url)
-    response.raise_for_status()
+    # Pool of active Piped instances to prevent single-node failure
+    piped_instances = [
+        "https://api.piped.private.coffee",
+        "https://pipedapi.moomoo.me",
+        "https://pipedapi.tokhmi.xyz",
+        "https://pipedapi.phoenixthrush.com",
+        "https://pipedapi.kavin.rocks"
+    ]
     
-    audio_streams = response.json().get("audioStreams", [])
+    audio_streams = None
+    
+    # Cycle through servers until one works
+    for instance in piped_instances:
+        try:
+            api_url = f"{instance}/streams/{video_id}"
+            response = requests.get(api_url, timeout=10)
+            response.raise_for_status()
+            
+            data = response.json()
+            if "audioStreams" in data and len(data["audioStreams"]) > 0:
+                audio_streams = data["audioStreams"]
+                break
+        except Exception:
+            continue
+            
     if not audio_streams:
-        raise ValueError("No audio streams found for this video.")
+        raise ValueError("All backup Piped servers failed. YouTube might be blocking them globally.")
         
-    # Find an m4a stream (highly compressed, fast to download)
     stream_url = next((stream['url'] for stream in audio_streams if stream['format'] == 'M4A'), audio_streams[0]['url'])
     
     audio_data = requests.get(stream_url)
-    
     final_path = f"{output_base_path}.m4a"
+    
     with open(final_path, "wb") as f:
         f.write(audio_data.content)
         
